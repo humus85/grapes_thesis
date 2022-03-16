@@ -43,7 +43,18 @@ NOT_PRINT_TRENDS = ['Vineyard', 'Treatment', 'Replication', 'Time', 'Vineyard_Nu
 DIMS_FOR_GRAPHS = ['Vineyard', 'Treatment', 'new_time', 'disruption_temperature', 'disruption_length']
 COLS_HUE = ['disruption_length', 'disruption_temperature']
 
+
 def get_storage_data(path_storage):
+    '''
+    this function receive path to storgae and does the following
+        1. read the excel file
+        2. clean non relevant data from room 3 and 10 and then combine them to 1 room.
+        3. add to each room the base temp
+        4. per each sheet in the excel -
+            a. clean data before test started
+            b. add week column
+            c. add room column
+    '''
     xl = pd.ExcelFile(path_storage)
     dfs = {}
     dfs_base = {''}
@@ -66,11 +77,6 @@ def get_storage_data(path_storage):
         dfs[sheet]['weeks'] = np.floor((dfs[sheet]['weeks'] / np.timedelta64(1, 'W')) + 1)
         # add aditional data
         dfs[sheet]['room'] = sheet
-        # dfs[sheet]['Humidity_cumsum'] = dfs[sheet]['Humidity'].cumsum()
-        # dfs[sheet]['Temperature_cumsum'] = dfs[sheet]['Temperature'].cumsum()
-        # dfs[sheet]['Humidity_max'] = dfs[sheet]['Humidity'].max()
-        # dfs[sheet]['Temperature_max'] = dfs[sheet]['Temperature'].max()
-        # dfs[sheet]['Temperature_max_relative'] = (dfs[sheet]['Temperature'] - dfs[sheet]['room_temp']).max()
         ####
         all_base_temps = pd.DataFrame(dfs_baselines).T
         all_base_temps.columns = ['room_temp']
@@ -80,6 +86,11 @@ def get_storage_data(path_storage):
 
 
 def get_data(path, path_b) -> pd.DataFrame:
+    '''
+    :param path: path to vinyard a excel file
+    :param path_b: path to vinyard b excel file
+    :return: data frame contains the concat of the 2 vinyards
+    '''
     df_a = pd.read_excel(path, sheet_name='Sheet1')
     df_b = pd.read_excel(path_b, sheet_name='Sheet1')
     column_names = df_a.columns
@@ -89,6 +100,10 @@ def get_data(path, path_b) -> pd.DataFrame:
 
 
 def get_vinyards_data(path) -> pd.DataFrame:
+    '''
+    :param path: path of additional data per each Vinyard
+    :return: data frame contains additional features in vinyard level
+    '''
     df_v = pd.read_excel(path, sheet_name='Decay evaluation 10.10.21',usecols='M:R')
     df_v = df_v.iloc[14:17]
     names = ['Vineyard', 'Vineyard_Number_of_measures', 'Vineyard_index', 'Vineyard_Std_index', 'Vineyard_Incidence', 'Vineyard_Std_Incidence']
@@ -97,7 +112,16 @@ def get_vinyards_data(path) -> pd.DataFrame:
     return df_v
 
 
-def get_prep_df(path,path_b,path_v,treatment_dict:dict) -> pd.DataFrame:
+def get_prep_df(path, path_b, path_v, treatment_dict: dict) -> pd.DataFrame:
+    '''
+
+    x:param path: using get_data function to create raw_data of measures
+    :param path_b: using get_data function to create raw_data of measures
+    :param path_v: path to vinyards to insert to get_vinyards_data function
+    :param treatment_dict:
+    :return: dataframe with cleaned column names, mapped period to numbers. in adition it adds the disruption length and disruption temp per each treatment.
+    '''
+
     new_df = get_data(path,path_b)
     new_df.drop(columns='Unnamed: 16', inplace=True)
     new_df.rename(columns={'Shattering(%)': 'Shattering(%) (T0)'}, inplace=True)
@@ -119,6 +143,11 @@ def get_prep_df(path,path_b,path_v,treatment_dict:dict) -> pd.DataFrame:
 
 
 def plot_correl_matrix(corr_mat: pd.DataFrame):
+    '''
+
+    :param corr_mat: correlation matrix prepared to create the datafram
+    :return: figure of correlation matrix
+    '''
     corr_mat.index = pd.CategoricalIndex(corr_mat.index)
     corr_mat.sort_index(level=0, inplace=True)
     sns.set(font_scale=0.6)
@@ -128,11 +157,21 @@ def plot_correl_matrix(corr_mat: pd.DataFrame):
 
 
 def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: list):
+    '''
+
+    :param df: raw_data
+    :param col_list_in: relevant columns list from measures taken from time 0
+    :param col_list_out: relevant columns list from measures that we want to check correl 78
+    :return:2 plots.
+        1. correlation matrix of all features taken in entrance to storage
+        2. correlation matrix of all features taken in entrance to storage vs relevant output features.
+    '''
     #in features vs in features
     df_in = df[col_list_in]
     correl = df_in.corr()
     plot_correl_matrix(correl)
     plt.savefig('in_vs_in_correl')
+
     #in features vs. out features
     df_out = df[col_list_out]
     results = pd.concat([df.loc[:, ~df.columns.isin(['Vineyard', 'Treatment', 'Replication', 'Time'])], df_out.add_suffix('_out')], axis=1)
@@ -144,7 +183,12 @@ def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: lis
     plt.savefig('in_vs_out_correl')
 
 
-def get_storage_per_treatment(storage_df:dict,exp_desc:dict):
+def get_storage_per_treatment(storage_df:dict, exp_desc: dict):
+    '''
+    :param storage_df: dictionary contains all storage data, key stands for the treatment
+    :param exp_desc: dictionary contains all storage relevant data per treatment
+    :return: dictionary contains log of storage data including interuptions.
+    '''
     storage_df_per_treatment = {}
     for treatment, values in exp_desc.items():
         mask_first_period = storage_df[values[0]]['weeks'] <= values[1]
@@ -156,6 +200,10 @@ def get_storage_per_treatment(storage_df:dict,exp_desc:dict):
 
 
 def enrich_storage_per_treatment(storage_dict:dict):
+    '''
+    :param storage_dict: receive dict with log of the storage data
+    :return: dictionary contains some statistics on log of the per each treatment
+    '''
     for treatment, df_treatment_storage in storage_dict.items():
         df_treatment_storage['Humidity_cumsum'] = df_treatment_storage['Humidity'].cumsum()
         df_treatment_storage['Temperature_cumsum'] = df_treatment_storage['Temperature'].cumsum()
@@ -169,6 +217,10 @@ def enrich_storage_per_treatment(storage_dict:dict):
 
 
 def map_weeks(row):
+    '''
+    :param row: mapping function from weeks to period in test
+    :return: period in test, numbered 1-4
+    '''
     if row['weeks'] <= 3:
         return 1
     elif row['weeks'] <= 6:
@@ -182,6 +234,10 @@ def map_weeks(row):
 
 
 def get_relevant_data_per_period(storage_dict:dict):
+    '''
+    :param storage_dict: dictionary contians storage data
+    :return: dict contains statistics per each period per treatment
+    '''
     final_storage_data_per_treatment = {}
     data_storage_for_all_periods = {}
     for treatments, values in storage_dict.items():
@@ -198,10 +254,17 @@ def get_relevant_data_per_period(storage_dict:dict):
     return pd.concat(data_storage_for_all_periods)
 
 
-def flatten_data_to_grpah(dim_list:list,df:pd.DataFrame, col_name: str, col_name_t0: str = None) -> pd.DataFrame:
+def flatten_data_to_grpah(dim_list: list, df: pd.DataFrame, col_name: str, col_name_t0: str = None) -> pd.DataFrame:
+    '''
+    :param dim_list:
+    :param df:
+    :param col_name:
+    :param col_name_t0:
+    :return:
+    '''
     temp_df = pd.DataFrame()
     if col_name_t0 is not None:
-        temp_df = df[['Vineyard', 'Treatment','new_time','disruption_temperature', 'disruption_length']]
+        temp_df = df[DIMS_FOR_GRAPHS]
         temp_df['new_time'] = 0 # create manually time 0
         temp_df[col_name] = df[[col_name_t0]]
     dim_list_for_flatten = dim_list + [col_name]
@@ -222,6 +285,10 @@ def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_di
 
 
 def get_all_t0(df: pd.DataFrame):
+    '''
+    :paxam df: this function get raw data with all columns
+    :return: 2 lists of all relevant columns in the data that has data in entrance to storage and the column name in out of storage
+    '''
     relevant_t0 = [col for col in df.columns if '(T0)' in col]
     relevant_columns_t0_list = [col.replace('(T0)', '').rstrip() for col in relevant_t0 if '(T0)' in col]
     list_t0 = list(set(df.columns).intersection(relevant_columns_t0_list))
@@ -229,7 +296,11 @@ def get_all_t0(df: pd.DataFrame):
 
 
 def get_data_storage(path_storage,treat_dict):
-
+    '''
+    :param path_storage: path to storage data
+    :param treat_dict: tretment dictionary contains treatment and storage data
+    :return: raw_data enriched with statistics about storage: temp, humidity, etc.
+    '''
     df_storage = get_storage_data(path_storage=path_storage)
     storge_data_per_treatment = get_storage_per_treatment(storage_df=df_storage, exp_desc=treat_dict)
     data_storage_enriched_per_treatment = enrich_storage_per_treatment(storge_data_per_treatment)
@@ -252,47 +323,47 @@ if __name__ == '__main__':
     temp_dim_list = copy.copy(DIMS_FOR_GRAPHS)
     temp_dim_list.remove("new_time")
 
-    # Tot = len(relevant_cols)
-    # Cols = 4
-    # # Compute Rows required
-    # Rows = Tot // Cols
-    # Rows += Tot % Cols
-
-    # for i, hue in enumerate(temp_dim_list):
-    #         # Create figure with appropriate space between subplots
-    #         fig = plt.figure(figsize=(15, 15))
-    #         fig.subplots_adjust(hspace=0.4, wspace=0.3)
-    #         for col, col_t0, idx in list(zip(relevant_cols, relevant_t0_cols, range(len(relevant_cols)))):
-    #             ax = fig.add_subplot(Rows, 4, idx + 1)
-    #             data_for_grpah = flatten_data_to_grpah(dim_list=DIMS_FOR_GRAPHS,df=full_data_w_storage, col_name=col, col_name_t0=col_t0)
-    #             plot_graph(df=data_for_grpah, col_name=col,dim_list=DIMS_FOR_GRAPHS, hue=hue, tmp_dim_list=temp_dim_list, axs=ax)
-    #         fig2 = plt.gcf()
-    #         plt.show()
-    #         plt.draw()
-    #         fig2.savefig(hue + 't0')
-
-    # print grpahs without t0
-
-    t1_list = list((Counter(full_data_w_storage) - Counter(COLS_ONLY_OUT) - Counter(relevant_t0_cols) - Counter(
-        relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
-    cols_to_print = t1_list + COLS_ONLY_OUT
-    Tot = len(cols_to_print)
+    Tot = len(relevant_cols)
     Cols = 4
     # Compute Rows required
     Rows = Tot // Cols
     Rows += Tot % Cols
+
     for i, hue in enumerate(temp_dim_list):
-        fig = plt.figure(figsize=(20, 20))
-        fig.subplots_adjust(hspace=0.4, wspace=0.3)
-        for col, idx in list(zip(cols_to_print, range(len(cols_to_print)))):
-            ax = fig.add_subplot(Rows, Cols, idx + 1)
-            data_for_grpah = flatten_data_to_grpah(dim_list=DIMS_FOR_GRAPHS,df=full_data_w_storage, col_name=col)
-            plot_graph(df=data_for_grpah, col_name=col, dim_list=DIMS_FOR_GRAPHS, hue=hue, tmp_dim_list=temp_dim_list, axs=ax)
-        fig1= plt.gcf()
-        plt.show()
-        plt.draw()
-        fig1.savefig(hue+'t1')
-        plt.close()
+            # Create figure with appropriate space between subplots
+            fig = plt.figure(figsize=(15, 15))
+            fig.subplots_adjust(hspace=0.4, wspace=0.3)
+            for col, col_t0, idx in list(zip(relevant_cols, relevant_t0_cols, range(len(relevant_cols)))):
+                ax = fig.add_subplot(Rows, 4, idx + 1)
+                data_for_grpah = flatten_data_to_grpah(dim_list=DIMS_FOR_GRAPHS,df=full_data_w_storage, col_name=col, col_name_t0=col_t0)
+                plot_graph(df=data_for_grpah, col_name=col,dim_list=DIMS_FOR_GRAPHS, hue=hue, tmp_dim_list=temp_dim_list, axs=ax)
+            fig2 = plt.gcf()
+            plt.show()
+            plt.draw()
+            fig2.savefig(hue + 't0')
+
+    # print grpahs without t0
+
+    # t1_list = list((Counter(full_data_w_storage) - Counter(COLS_ONLY_OUT) - Counter(relevant_t0_cols) - Counter(
+    #     relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
+    # cols_to_print = t1_list + COLS_ONLY_OUT
+    # Tot = len(cols_to_print)
+    # Cols = 4
+    # # Compute Rows required
+    # Rows = Tot // Cols
+    # Rows += Tot % Cols
+    # for i, hue in enumerate(temp_dim_list):
+    #     fig = plt.figure(figsize=(20, 20))
+    #     fig.subplots_adjust(hspace=0.4, wspace=0.3)
+    #     for col, idx in list(zip(cols_to_print, range(len(cols_to_print)))):
+    #         ax = fig.add_subplot(Rows, 4, idx + 1)
+    #         data_for_grpah = flatten_data_to_grpah(dim_list=DIMS_FOR_GRAPHS,df=full_data_w_storage, col_name=col)
+    #         plot_graph(df=data_for_grpah, col_name=col, dim_list=DIMS_FOR_GRAPHS, hue=hue, tmp_dim_list=temp_dim_list, axs=ax)
+    #     fig1= plt.gcf()
+    #     plt.show()
+    #     plt.draw()
+    #     fig1.savefig(hue+'t1')
+    #     plt.close()
 
 
     # create correlation matrix
