@@ -198,7 +198,7 @@ def get_storage_per_treatment(storage_df:dict, exp_desc: dict):
         storage_df_per_treatment[treatment] = pd.concat([first_period, second_period])
     return storage_df_per_treatment
 
-a
+
 def enrich_storage_per_treatment(storage_dict:dict):
     '''
     :param storage_dict: receive dict with log of the storage data
@@ -256,11 +256,11 @@ def get_relevant_data_per_period(storage_dict:dict):
 
 def flatten_data_to_grpah(dim_list: list, df: pd.DataFrame, col_name: str, col_name_t0: str = None) -> pd.DataFrame:
     '''
-    :param dim_list:
-    :param df:
-    :param col_name:
-    :param col_name_t0:
-    :return:
+    :param dim_list: list of all dimensions that we want to create brakedown by + new_time column for function itself.
+    :param df: raw_data
+    :param col_name: relevant column names that we would like to create the grpahs
+    :param col_name_t0: same list, but with values that have data on time 0 of storage
+    :return: small df, from which we can simply create multiple subplots
     '''
     temp_df = pd.DataFrame()
     if col_name_t0 is not None:
