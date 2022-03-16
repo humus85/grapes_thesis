@@ -198,7 +198,7 @@ def get_storage_per_treatment(storage_df:dict, exp_desc: dict):
         storage_df_per_treatment[treatment] = pd.concat([first_period, second_period])
     return storage_df_per_treatment
 
-
+a
 def enrich_storage_per_treatment(storage_dict:dict):
     '''
     :param storage_dict: receive dict with log of the storage data
