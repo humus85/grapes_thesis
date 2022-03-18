@@ -273,6 +273,16 @@ def flatten_data_to_grpah(dim_list: list, df: pd.DataFrame, col_name: str, col_n
 
 
 def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_dim_list: list,axs):
+    '''
+
+    :param df: flatten data frame with structered known data
+    :param col_name: name of the feature that the figure will be based on.
+    :param dim_list: dimensions list brakedown
+    :param hue: variable to brake the lines with
+    :param tmp_dim_list: dimensions list brakedown (hue)
+    :param axs: changing axs to plot the figure on.
+    :return: each facets with multiple subplots.
+    '''
     df_plot = df.fillna(np.inf).groupby(dim_list)[[col_name]].mean().replace(np.inf, np.nan).reset_index()
     dim_list_for_grpah = dim_list + [col_name]
     axs = sns.lineplot(data=df_plot, x="new_time",
@@ -281,7 +291,6 @@ def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_di
     axs.xaxis.set_major_locator(ticker.MultipleLocator(1))
     axs.set(xlabel='time', ylabel=col_name, title=col_name + ' over time by ' +hue)
     axs.plot()
-
 
 
 def get_all_t0(df: pd.DataFrame):
@@ -311,60 +320,56 @@ def get_data_storage(path_storage,treat_dict):
     return df_storage_data_final
 
 
-if __name__ == '__main__':
-
-    raw_data = get_prep_df(path=PATH, path_b=PATH_B,path_v=PATH_VINYARDS, treatment_dict=TREAT_DESCRIPTION)
-    full_data_w_storage = get_data_storage(path_storage= PATH_STORAGE, treat_dict=TREAT_DESCRIPTION)
-
-    ## create all graphs
-    # print grpahs with t0
-
-    relevant_t0_cols, relevant_cols = get_all_t0(full_data_w_storage)
+def create_all_subplots(features_list: list, full_storage_data, features_list_t0: list = None,dimension_list=DIMS_FOR_GRAPHS,ncols=4,):
+    '''
+    :param features_list: list of all features exist in the data, on this features we will plot all relevant subplot
+    :param features_list_t0:list of all features exist in the data, these features have also measure in t0,on this features we will plot all relevant subplot
+    :param dim_list:all the relevant dimensions that we will brakedown the data with
+    :param ncols: num of cols that will be in the subplot
+    :param dimension_list: all the relevant dimensions that we will brakedown the data with
+    :param full_storage_data: full data before treatment
+    :return: number of facets, in each facet there will be subplots
+    '''
     temp_dim_list = copy.copy(DIMS_FOR_GRAPHS)
     temp_dim_list.remove("new_time")
 
-    Tot = len(relevant_cols)
-    Cols = 4
     # Compute Rows required
+    Tot = len(relevant_cols)
+    Cols = ncols
     Rows = Tot // Cols
     Rows += Tot % Cols
 
+    data = (features_list, features_list_t0, range(len(features_list)))
+    if features_list_t0 is None:
+        data = (features_list,  range(len(features_list)))
+
     for i, hue in enumerate(temp_dim_list):
-            # Create figure with appropriate space between subplots
             fig = plt.figure(figsize=(15, 15))
             fig.subplots_adjust(hspace=0.4, wspace=0.3)
-            for col, col_t0, idx in list(zip(relevant_cols, relevant_t0_cols, range(len(relevant_cols)))):
-                ax = fig.add_subplot(Rows, 4, idx + 1)
-                data_for_grpah = flatten_data_to_grpah(dim_list=DIMS_FOR_GRAPHS,df=full_data_w_storage, col_name=col, col_name_t0=col_t0)
-                plot_graph(df=data_for_grpah, col_name=col,dim_list=DIMS_FOR_GRAPHS, hue=hue, tmp_dim_list=temp_dim_list, axs=ax)
+            for tup in zip(*data):
+                ax = fig.add_subplot(Rows, ncols, tup[-1] + 1)
+                data_for_grpah = flatten_data_to_grpah(dim_list=dimension_list, df=full_storage_data, col_name=tup[0],
+                                                       col_name_t0=tup[1] if features_list_t0 is not None else None)  # take t0 data if exist
+                plot_graph(df=data_for_grpah, col_name=tup[0], dim_list=dimension_list, hue=hue,
+                           tmp_dim_list=temp_dim_list, axs=ax)
             fig2 = plt.gcf()
             plt.show()
             plt.draw()
-            fig2.savefig(hue + 't0')
+            fig2.savefig('figures/' + hue + '_' + str(i) + '.png')
 
-    # print grpahs without t0
 
-    # t1_list = list((Counter(full_data_w_storage) - Counter(COLS_ONLY_OUT) - Counter(relevant_t0_cols) - Counter(
-    #     relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
-    # cols_to_print = t1_list + COLS_ONLY_OUT
-    # Tot = len(cols_to_print)
-    # Cols = 4
-    # # Compute Rows required
-    # Rows = Tot // Cols
-    # Rows += Tot % Cols
-    # for i, hue in enumerate(temp_dim_list):
-    #     fig = plt.figure(figsize=(20, 20))
-    #     fig.subplots_adjust(hspace=0.4, wspace=0.3)
-    #     for col, idx in list(zip(cols_to_print, range(len(cols_to_print)))):
-    #         ax = fig.add_subplot(Rows, 4, idx + 1)
-    #         data_for_grpah = flatten_data_to_grpah(dim_list=DIMS_FOR_GRAPHS,df=full_data_w_storage, col_name=col)
-    #         plot_graph(df=data_for_grpah, col_name=col, dim_list=DIMS_FOR_GRAPHS, hue=hue, tmp_dim_list=temp_dim_list, axs=ax)
-    #     fig1= plt.gcf()
-    #     plt.show()
-    #     plt.draw()
-    #     fig1.savefig(hue+'t1')
-    #     plt.close()
+if __name__ == '__main__':
+    raw_data = get_prep_df(path=PATH, path_b=PATH_B,path_v=PATH_VINYARDS, treatment_dict=TREAT_DESCRIPTION)
+    full_data_w_storage = get_data_storage(path_storage= PATH_STORAGE, treat_dict=TREAT_DESCRIPTION)
+    relevant_t0_cols, relevant_cols = get_all_t0(df=full_data_w_storage)
+    storage_list = list((Counter(full_data_w_storage) - Counter(COLS_ONLY_OUT) - Counter(relevant_t0_cols) - Counter(
+        relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
 
+    # print all subplots
+    for feature_list in (#[relevant_cols,relevant_t0_cols], [COLS_ONLY_OUT,None],
+                         [storage_list,None]):
+        create_all_subplots(features_list=feature_list[0], features_list_t0=feature_list[1], ncols=4,
+                            dimension_list=DIMS_FOR_GRAPHS, full_storage_data=full_data_w_storage)
 
     # create correlation matrix
     in_cols = [col for col in raw_data.columns if 'T0' in col]
