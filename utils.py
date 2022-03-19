@@ -40,7 +40,7 @@ COLS_ONLY_OUT = ['Weightloss (%)','Bleaching index ','Decay', 'Decay (%)', 'Shri
 NOT_PRINT_TRENDS = ['Vineyard', 'Treatment', 'Replication', 'Time', 'Vineyard_Number_of_measures', 'Vineyard_index',
                     'Vineyard_Std_index','Vineyard_Incidence', 'new_time', 'treatment','mapped_period' ]
 
-DIMS_FOR_GRAPHS = ['Vineyard', 'Treatment', 'new_time', 'disruption_temperature', 'disruption_length']
+DIMS_FOR_GRAPHS = ['Vineyard', 'new_time', 'disruption_temperature', 'disruption_length']
 COLS_HUE = ['disruption_length', 'disruption_temperature']
 
 
@@ -285,9 +285,11 @@ def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_di
     '''
     df_plot = df.fillna(np.inf).groupby(dim_list)[[col_name]].mean().replace(np.inf, np.nan).reset_index()
     dim_list_for_grpah = dim_list + [col_name]
+    sns.set_palette("PuBuGn_d")
     axs = sns.lineplot(data=df_plot, x="new_time",
-                      y=col_name, hue=hue, ci=None,legend=True)
-    sns.color_palette("Paired")
+                       y=col_name, hue=hue, ci=None,legend=True,palette='hls')
+
+    # sns.color_palette("Paired")
     axs.xaxis.set_major_locator(ticker.MultipleLocator(1))
     axs.set(xlabel='time', ylabel=col_name, title=col_name + ' over time by ' +hue)
     axs.plot()
@@ -320,6 +322,9 @@ def get_data_storage(path_storage,treat_dict):
     return df_storage_data_final
 
 
+# def is_interesting_data_for_plot(df:pd.DataFrame):
+
+
 def create_all_subplots(features_list: list, full_storage_data, features_list_t0: list = None,dimension_list=DIMS_FOR_GRAPHS,ncols=4,):
     '''
     :param features_list: list of all features exist in the data, on this features we will plot all relevant subplot
@@ -344,14 +349,22 @@ def create_all_subplots(features_list: list, full_storage_data, features_list_t0
         data = (features_list,  range(len(features_list)))
 
     for i, hue in enumerate(temp_dim_list):
-            fig = plt.figure(figsize=(15, 15))
+            fig = plt.figure(figsize=(24, 24))
             fig.subplots_adjust(hspace=0.4, wspace=0.3)
+            i_print = 1
             for tup in zip(*data):
-                ax = fig.add_subplot(Rows, ncols, tup[-1] + 1)
                 data_for_grpah = flatten_data_to_grpah(dim_list=dimension_list, df=full_storage_data, col_name=tup[0],
                                                        col_name_t0=tup[1] if features_list_t0 is not None else None)  # take t0 data if exist
-                plot_graph(df=data_for_grpah, col_name=tup[0], dim_list=dimension_list, hue=hue,
-                           tmp_dim_list=temp_dim_list, axs=ax)
+
+                df_plot_check = data_for_grpah.fillna(np.inf).groupby(dimension_list)[[tup[0]]].mean().replace(np.inf,np.nan).reset_index()
+                if (df_plot_check[[hue,tup[0]]][tup[0]]).nunique() > max(df_plot_check[hue].nunique(),4):
+                    ax = fig.add_subplot(Rows, ncols, i_print)
+                    plot_graph(df=data_for_grpah, col_name=tup[0], dim_list=dimension_list, hue=hue,
+                               tmp_dim_list=temp_dim_list, axs=ax)
+                    i_print+=1
+                    ax.get_legend().remove()
+            handles, labels = ax.get_legend_handles_labels()
+            fig.legend(handles, labels, loc='lower right', bbox_to_anchor=(.6, .6))
             fig2 = plt.gcf()
             plt.show()
             plt.draw()
@@ -366,10 +379,13 @@ if __name__ == '__main__':
         relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
 
     # print all subplots
-    for feature_list in (#[relevant_cols,relevant_t0_cols], [COLS_ONLY_OUT,None],
-                         [storage_list,None]):
-        create_all_subplots(features_list=feature_list[0], features_list_t0=feature_list[1], ncols=4,
-                            dimension_list=DIMS_FOR_GRAPHS, full_storage_data=full_data_w_storage)
+    data_to_plot = {1: [relevant_cols, relevant_t0_cols],
+                    2: [COLS_ONLY_OUT, 'None'],
+                    3: [storage_list, 'None'],
+                    }
+    for feature_list in enumerate(data_to_plot.values()):
+        create_all_subplots(features_list=feature_list[1][0], features_list_t0=feature_list[1][1] if feature_list[1][1]!= 'None' else None,
+                             ncols=4, dimension_list=DIMS_FOR_GRAPHS, full_storage_data=full_data_w_storage)
 
     # create correlation matrix
     in_cols = [col for col in raw_data.columns if 'T0' in col]
