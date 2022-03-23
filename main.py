@@ -400,15 +400,15 @@ if __name__ == '__main__':
         relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
 
     # print all subplots
-    # data_to_plot = { 1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
-    #                 2: [COLS_ONLY_OUT, 'None'],  # data collected only in out storage
-    #                 3: [storage_list, 'None'],  # data relevant for storage only
-    #                 }
+    data_to_plot = { 1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
+                    2: [COLS_ONLY_OUT, 'None'],  # data collected only in out storage
+                    3: [storage_list, 'None'],  # data relevant for storage only
+                    }
 
-    # for feature_list in enumerate(data_to_plot.values()):
-    #     create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
-    #                         features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
-    #                         dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
+    for feature_list in enumerate(data_to_plot.values()):
+        create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
+                            features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
+                            dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
 
     # create correlation matrix
     in_cols = [col for col in raw_data.columns if 'T0' in col]
