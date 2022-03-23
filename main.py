@@ -154,6 +154,8 @@ def plot_correl_matrix(corr_mat: pd.DataFrame, correlation_name: str):
     corr_mat.sort_index(level=0, inplace=True)
     sns.set(font_scale=0.6)
     if correlation_name == 'in_vs_in':
+        cols = corr_mat.columns.sort_values() # plot ordered heatmap
+        corr_mat = corr_mat[cols]
         grpah = sns.heatmap(corr_mat, cmap='YlGnBu',vmin=-1, vmax=1, annot=True)
     else:
         grpah = sns.heatmap(corr_mat, cmap='YlGnBu', vmin=-1, vmax=1, annot=True)
