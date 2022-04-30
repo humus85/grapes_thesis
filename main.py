@@ -493,12 +493,77 @@ def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage
                 i_print += 1
                 if len(plot_data_df):
                     ax.get_legend().remove()
+
         handles, labels = ax.get_legend_handles_labels()
         fig.legend(handles, labels, fontsize=18, loc='lower right', bbox_to_anchor=(1, 0.1))
         fig2 = plt.gcf()
         plt.show()
         plt.draw()
         fig2.savefig('features_by_matrix/' + str(data_place_in_dict) + '_' + feature + '_' + str(i) + '.png')
+
+
+def create_all_subplots_per_each_fruit_feature_folded_dim(features_list: list, full_storage_data: pd.DataFrame,
+                                               data_place_in_dict: int,
+                                               features_list_t0: list = None, dimension_list=DIMS_FOR_GRAPHS
+                                               ):
+    '''
+
+    :return: number of facets, in each facet there will be subplots
+    '''
+    temp_dim_list = copy.copy(DIMS_FOR_GRAPHS)
+    temp_dim_list.remove("new_time")
+
+    # Compute Rows required
+    # Changes depends on the folded dim
+    Cols = full_storage_data['disruption_length'].nunique()
+    Rows = 1 # full_storage_data['disruption_temperature'].nunique()
+
+    data = (features_list, features_list_t0, range(len(features_list)))
+    if features_list_t0 is None:
+        data = (features_list, range(len(features_list)))
+
+    # loop for each feature
+    for i, feature in enumerate(data[0]):
+        # if we print by temp then 6,24
+        # fig = plt.figure(figsize=(6, 24))
+        fig = plt.figure(figsize=(24, 4.8))
+        fig.subplots_adjust(hspace=0.4, wspace=0.3)
+        i_print = 1
+        # loop for each combination of length & temp
+        # for tup in zip(*data):
+        data_for_grpah = flatten_data_to_grpah(dim_list=dimension_list, df=full_storage_data, col_name=data[0][i],
+                                               col_name_t0=data[1][
+                                                   i] if features_list_t0 is not None else None)  # take t0 data if exist
+        data_for_grpah['new_time'] = data_for_grpah['new_time'] * 3
+        ylim = (data_for_grpah.iloc[:, -1].quantile(0.01), data_for_grpah.iloc[:, -1].quantile(0.99))
+
+        # choose one of the for loop depands on the folded dim
+        # for temp in sorted(full_storage_data['disruption_temperature'].unique()):
+        for length in sorted(full_storage_data['disruption_length'].unique()):
+                data_for_grpah['disruption_length'] = np.where(data_for_grpah['disruption_length'] == 12, 0,
+                                                               data_for_grpah['disruption_length'])
+                ax = fig.add_subplot(Rows, Cols, i_print)
+
+                #chhose one of the plot_data_df based on the folded dim
+                # plot_data_df = data_for_grpah[(data_for_grpah['disruption_temperature'] == temp)]
+                plot_data_df = data_for_grpah[(data_for_grpah['disruption_length'] == length)]
+
+                plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
+                           # tmp_dim_list=temp_dim_list, axs=ax, dist_week='_',dist_temp=temp, ytickslim=ylim)
+                           tmp_dim_list=temp_dim_list, axs=ax, dist_week=length, dist_temp='_', ytickslim=ylim)
+                i_print += 1
+                if len(plot_data_df):
+                    ax.get_legend().remove()
+
+        # handles, labels = ax.get_legend_handles_labels()
+        # fig.legend(handles, labels, fontsize=18, loc='lower right', bbox_to_anchor=(1, 0.1))
+        fig2 = plt.gcf()
+        plt.show()
+        plt.draw()
+        fig2.savefig('features_by_folded_dim/' + str(data_place_in_dict) + '_' + feature + '_' + str(i) + '.png')
+        # break
+
+
 
 
 if __name__ == '__main__':
@@ -510,8 +575,8 @@ if __name__ == '__main__':
     storage_list = list((Counter(full_data_w_storage) - Counter(COLS_ONLY_OUT) - Counter(relevant_t0_cols) - Counter(
         relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
 
-    data_to_plot = {#1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
-                    2: [COLS_ONLY_OUT, 'None'],  # data collected only in out storage
+    data_to_plot = {1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
+                     # 2: [COLS_ONLY_OUT, 'None'],  # data collected only in out storage
                     #3: [storage_list, 'None']  # data relevant for storage only
                     }
 
@@ -519,7 +584,7 @@ if __name__ == '__main__':
     #     create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
     #                         features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
     #                         dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
-    #
+
 
     # matrix plotting
     # for feature_list in enumerate(data_to_plot.values()):
@@ -527,7 +592,14 @@ if __name__ == '__main__':
     #                             features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
     #                             dimension_list=DIMS_FOR_GRAPHS, data_place_in_dict=feature_list[0])
 
+
+    # folded matrix plotting
+    for feature_list in enumerate(data_to_plot.values()):
+        create_all_subplots_per_each_fruit_feature_folded_dim(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
+                                features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
+                                dimension_list=DIMS_FOR_GRAPHS, data_place_in_dict=feature_list[0])
+
     # # create correlation matrix
-    in_cols = [col for col in raw_data.columns if 'T0' in col and col!= 'Shattering(%) (T0)']
-    create_pearson_correl(raw_data, col_list_in=in_cols, col_list_out=COLS_OUT)
+    # in_cols = [col for col in raw_data.columns if 'T0' in col and col!= 'Shattering(%) (T0)']
+    # create_pearson_correl(raw_data, col_list_in=in_cols, col_list_out=COLS_OUT)
     print("Done!!!")
