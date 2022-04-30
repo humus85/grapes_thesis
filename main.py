@@ -150,9 +150,9 @@ def get_prep_df(path, path_b, path_v, treatment_dict: dict) -> pd.DataFrame:
     return new_df
 
 
-def plot_correl_matrix(corr_mat: pd.DataFrame, correlation_name: str):
+def plot_correl_matrix(corr_mat: pd.DataFrame, correlation_name: str, vinyeard:str):
     '''
-    :param corr_mat: correlation matrix prepared to create the datafram
+    :param corr_mat: correlation matrix prepared to create the dataframe
     :return: figure of correlation matrix
     '''
 
@@ -172,13 +172,12 @@ def plot_correl_matrix(corr_mat: pd.DataFrame, correlation_name: str):
     plt.tight_layout()
     plt.show()
     plt.draw()
-    fig5.savefig('figures_update/' + correlation_name + '.png')
+    fig5.savefig('figures_update/' + correlation_name + ', Vineyard: ' + vinyeard + '.png')
     # plt.show()
 
 
 def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: list):
     '''
-
     :param df: raw_data
     :param col_list_in: relevant columns list from measures taken from time 0
     :param col_list_out: relevant columns list from measures that we want to check correl 78
@@ -187,21 +186,23 @@ def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: lis
         2. correlation matrix of all features taken in entrance to storage vs relevant output features.
     '''
     # in features vs in features
-    df_in = df[col_list_in]
-    correl = df_in.corr()
-    plot_correl_matrix(correl, correlation_name='in_vs_in')
+    df_in = df[col_list_in + ['Vineyard']]
+    df_out = df[col_list_out]
+
+    for Vineyard in df_in['Vineyard'].unique():
+        correl = df_in[df_in['Vineyard'] == Vineyard].corr()
+        plot_correl_matrix(correl, correlation_name='in_vs_in', vinyeard = Vineyard)
 
     # in features vs. out features
-    df_out = df[col_list_out]
-    results = pd.concat(
-        [df_in, df_out.add_suffix('_out')],
+
+
         # [df.loc[:, ~df.columns.isin(['Vineyard', 'Treatment', 'Replication', 'Time','new_time'])], df_out.add_suffix('_out')],
-        axis=1)
-    correl_out = results.corr()
-    out_cols = [col for col in correl_out.columns if '_out' in col]
-    correl_out = correl_out[out_cols]
-    correl_out = correl_out[~correl_out.index.str.contains('_out')]
-    plot_correl_matrix(correl_out, correlation_name='in_vs_out')
+        results = pd.concat([df_in, df_out.add_suffix('_out')], axis=1)
+        correl_out = results[results['Vineyard'] == Vineyard].corr()
+        out_cols = [col for col in correl_out.columns if '_out' in col]
+        correl_out = correl_out[out_cols]
+        correl_out = correl_out[~correl_out.index.str.contains('_out')]
+        plot_correl_matrix(correl_out, correlation_name='in_vs_out', vinyeard = Vineyard)
 
 
 def get_storage_per_treatment(storage_df: dict, exp_desc: dict):
@@ -291,10 +292,10 @@ def get_relevant_data_per_period(storage_dict: dict):
             #  this function is OK. Now I want to take the result of this function and
             # combine it with the last row of relevant_data (relevant_data.iloc[-1:])
             # the problem is when I use cross join, some columns are disappearing, and it makes no sense.
-            #
-            tsfresh_treatment_data = get_data_from_tsfresh(treatment_num=treatments, df=relevant_data,
-                                                           storage_features=['Humidity', 'Temperature'])
-            all_storage_and_tsfresh_data = pd.merge(relevant_data.iloc[-1:], tsfresh_treatment_data, how='cross')
+####
+            # tsfresh_treatment_data = get_data_from_tsfresh(treatment_num=treatments, df=relevant_data,
+            #                                                storage_features=['Humidity', 'Temperature'])
+            # all_storage_and_tsfresh_data = pd.merge(relevant_data.iloc[-1:], tsfresh_treatment_data, how='cross')
             #this is what I want to do --> final_storage_data_per_treatment[i] = all_storage_and_tsfresh_data
             final_storage_data_per_treatment[i] = relevant_data.iloc[-1:]
 
@@ -321,7 +322,7 @@ def flatten_data_to_grpah(dim_list: list, df: pd.DataFrame, col_name: str, col_n
 
 
 def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_dim_list: list, axs,
-               dist_week=None, dist_temp=None):
+               ytickslim = None ,dist_week=None, dist_temp=None):
     '''
 
     :param df: flatten data frame with structered known data
@@ -330,6 +331,7 @@ def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_di
     :param hue: variable to brake the lines with
     :param tmp_dim_list: dimensions list brakedown (hue)
     :param axs: changing axs to plot the figure on.
+    :param ytickslim: set the y axis ticks to be equal in all subplots.
     :return: each facets with multiple subplots.
     '''
     df_plot = df.fillna(np.inf).groupby(dim_list)[[col_name]].mean().replace(np.inf, np.nan).reset_index()
@@ -346,6 +348,8 @@ def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_di
     axs.tick_params(axis='both', labelsize=20)
     axs.set_xlabel('Week', fontsize=24)
     axs.set_ylabel(col_name, fontsize=24)
+    if ytickslim:
+        axs.set_ylim(bottom=ytickslim[0], top=ytickslim[1])
     if dist_week:
         axs.set_title(label=col_name + ':  weeks_dist: ' + str(dist_week) + '  temp_dist: ' + str(dist_temp), size=14)
     else:
@@ -468,7 +472,7 @@ def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage
                                                col_name_t0=data[1][
                                                    i] if features_list_t0 is not None else None)  # take t0 data if exist
         data_for_grpah['new_time'] = data_for_grpah['new_time'] * 3
-        # ax = fig.add_subplot(Rows, Cols, i_print)
+        ylim = (data_for_grpah.iloc[:,-1].quantile(0.01),data_for_grpah.iloc[:,-1].quantile(0.99))
         for temp in sorted(full_storage_data['disruption_temperature'].unique()):
             for length in sorted(full_storage_data['disruption_length'].unique()):
                 data_for_grpah['disruption_length'] = np.where(data_for_grpah['disruption_length'] == 12, 0,
@@ -485,7 +489,7 @@ def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage
                                 data_for_grpah['disruption_length'] == length)]
                 plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
                            tmp_dim_list=temp_dim_list, axs=ax, dist_week=0 if length == 12 else length,
-                           dist_temp=temp)
+                           dist_temp=temp, ytickslim=ylim)
                 i_print += 1
                 if len(plot_data_df):
                     ax.get_legend().remove()
@@ -506,15 +510,15 @@ if __name__ == '__main__':
     storage_list = list((Counter(full_data_w_storage) - Counter(COLS_ONLY_OUT) - Counter(relevant_t0_cols) - Counter(
         relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
 
-    data_to_plot = {1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
+    data_to_plot = {#1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
                     2: [COLS_ONLY_OUT, 'None'],  # data collected only in out storage
-                    3: [storage_list, 'None']  # data relevant for storage only
+                    #3: [storage_list, 'None']  # data relevant for storage only
                     }
 
-    for feature_list in enumerate(data_to_plot.values()):
-        create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
-                            features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
-                            dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
+    # for feature_list in enumerate(data_to_plot.values()):
+    #     create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
+    #                         features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
+    #                         dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
     #
 
     # matrix plotting
@@ -524,6 +528,6 @@ if __name__ == '__main__':
     #                             dimension_list=DIMS_FOR_GRAPHS, data_place_in_dict=feature_list[0])
 
     # # create correlation matrix
-    # in_cols = [col for col in raw_data.columns if 'T0' in col and col!= 'Shattering(%) (T0)']
-    # create_pearson_correl(raw_data, col_list_in=in_cols, col_list_out=COLS_OUT)
+    in_cols = [col for col in raw_data.columns if 'T0' in col and col!= 'Shattering(%) (T0)']
+    create_pearson_correl(raw_data, col_list_in=in_cols, col_list_out=COLS_OUT)
     print("Done!!!")
