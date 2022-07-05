@@ -8,18 +8,21 @@ import numpy as np
 from collections import Counter
 import copy
 from tsfresh import extract_features, extract_relevant_features, select_features
+from scipy import stats
 from tsfresh.utilities.dataframe_functions import impute
 from tsfresh.feature_extraction import ComprehensiveFCParameters
 import datetime
 import tsfresh
 
 pd.options.mode.chained_assignment = None
-PATH = 'data/Grapes-Vineyard A.xlsx'
-PATH_B = 'data/Grapes-Vineyard B.xlsx'
-COLS_OUT = ['Acceptance', 'Rachis Index', 'Bleaching index ', 'Cracking index', 'Shatter', 'Firmness',
+
+
+PATH = 'data/untitled folder/Grapes-Vineyard A edited.xlsx' #'data/Grapes-Vineyard A.xlsx'
+PATH_B = 'data/untitled folder/Grapes-Vineyard B-edited.xlsx' #'data/Grapes-Vineyard B.xlsx'
+COLS_OUT = ['Acceptance', 'Rachis Index', 'Bleaching index ', 'Cracking index', 'Shattering(%)', 'Firmness',
             'Weightloss (%)', 'Decay (%)']
 PATH_VINYARDS = 'data/Decay assesment in vineyards A and B (6) (1).xlsx'
-PATH_STORAGE = 'data/Erdom room tempeartures.xlsx'
+PATH_STORAGE = 'data/untitled folder/Erdom room tempeartures (2).xlsx'
 TREAT_DESCRIPTION = {
     1: ['room 10 S617.01.22', 12, 'room 10 S617.01.22', 0],
     2: ['Room 20 S5 17.01.22', 12, 'Room 20 S5 17.01.22', 0],
@@ -39,7 +42,7 @@ TREAT_DESCRIPTION = {
 RELEVANT_STORAGE_DATA = ['treatment', 'Humidity_cumsum', 'Temperature_cumsum', 'Humidity_max', 'Temperature_max',
                          'Temperature_max_relative',
                          'mapped_period', 'avg_temp_in_period', 'std_temp_in_period', 'avg_humidity_in_period',
-                         'std_humidity_in_period']
+                         'std_humidity_in_period','Temperature_dday','kPa']
 
 COLS_ONLY_OUT = ['Weightloss (%)', 'Bleaching index ', 'Decay', 'Decay (%)', 'Shriveling ']
 NOT_PRINT_TRENDS = ['Vineyard', 'Treatment', 'Replication', 'Time', 'Vineyard_Number_of_measures', 'Vineyard_index',
@@ -64,7 +67,7 @@ def get_storage_data(path_storage):
     dfs = {}
     dfs_base = {''}
     for sheet in ([s for s in xl.sheet_names if s != 'Sheet1']):
-        dfs[sheet] = pd.read_excel(path_storage, sheet_name=sheet, usecols='A:E')
+        dfs[sheet] = pd.read_excel(path_storage, sheet_name=sheet, usecols='A:I')
     # room 10 was malfunction at 24/12/21 so, I'm removing this data and paste data from room 3
     dfs['room 10 S617.01.22'] = dfs['room 10 S617.01.22'].drop(dfs['room 10 S617.01.22'].tail(2311).index)
     dfs['Room 3 S2 17.01.22'] = dfs['Room 3 S2 17.01.22'].drop(dfs['Room 3 S2 17.01.22'].head(2702).index)
@@ -87,7 +90,6 @@ def get_storage_data(path_storage):
         all_base_temps = pd.DataFrame(dfs_baselines).T
         all_base_temps.columns = ['room_temp']
         dfs[sheet] = dfs[sheet].merge(all_base_temps, left_on='room', right_index=True)
-        # dfs[sheet]['Temperature_max_relative'] = (dfs[sheet]['Temperature'] - dfs[sheet]['room_temp']).max()
     return dfs
 
 
@@ -135,6 +137,8 @@ def get_prep_df(path, path_b, path_v, treatment_dict: dict) -> pd.DataFrame:
     new_df.rename(columns={'Shattering(%).1': 'Shattering(%)'}, inplace=True)
     new_df.rename(columns={'Shattering(%).1': 'Shattering(%)'}, inplace=True)
     new_df.rename(columns={'Rachis index  (T0)': 'Rachis Index  (T0)'}, inplace=True)
+    # remove shatter due to redundant
+    new_df = new_df.drop('Shatter (T0)', axis=1)
     df_vinyards = get_vinyards_data(path=path_v)
     new_df = pd.merge(left=new_df, right=df_vinyards, left_on='Vineyard', right_on='Vineyard')
     match = {
@@ -150,7 +154,16 @@ def get_prep_df(path, path_b, path_v, treatment_dict: dict) -> pd.DataFrame:
     return new_df
 
 
-def plot_correl_matrix(corr_mat: pd.DataFrame, correlation_name: str, vinyeard:str):
+def corr_sig(df=None):
+    p_matrix = np.zeros(shape=(df.shape[0],df.shape[1]))
+    for col in df.columns:
+        for col2 in df.drop(col,axis=1).columns:
+            _, p = stats.pearsonr(df[col],df[col2])
+            p_matrix[df.columns.to_list().index(col),df.columns.to_list().index(col2)] = p
+    return p_matrix
+
+
+def plot_correl_matrix(corr_mat: pd.DataFrame, correlation_name: str, vinyeard:str,p_values_flag):
     '''
     :param corr_mat: correlation matrix prepared to create the dataframe
     :return: figure of correlation matrix
@@ -172,7 +185,7 @@ def plot_correl_matrix(corr_mat: pd.DataFrame, correlation_name: str, vinyeard:s
     plt.tight_layout()
     plt.show()
     plt.draw()
-    fig5.savefig('figures_update/' + correlation_name + ', Vineyard: ' + vinyeard + '.png')
+    fig5.savefig('figures_update/new/' + correlation_name + ', Vineyard: ' + vinyeard + 'P_values:' + p_values_flag +'.png')
     # plt.show()
 
 
@@ -191,7 +204,12 @@ def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: lis
 
     for Vineyard in df_in['Vineyard'].unique():
         correl = df_in[df_in['Vineyard'] == Vineyard].corr()
-        plot_correl_matrix(correl, correlation_name='in_vs_in', vinyeard = Vineyard)
+        p_values = corr_sig(correl)
+        plot_correl_matrix(correl, correlation_name='in_vs_in', vinyeard=Vineyard,p_values_flag='False')
+
+        p_values_df = pd.DataFrame(p_values, columns=correl.columns.values.tolist(),
+                                   index=correl.index.values.tolist())
+        plot_correl_matrix(p_values_df, correlation_name='in_vs_in', vinyeard=Vineyard, p_values_flag='True')
 
     # in features vs. out features
 
@@ -202,8 +220,12 @@ def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: lis
         out_cols = [col for col in correl_out.columns if '_out' in col]
         correl_out = correl_out[out_cols]
         correl_out = correl_out[~correl_out.index.str.contains('_out')]
-        plot_correl_matrix(correl_out, correlation_name='in_vs_out', vinyeard = Vineyard)
+        plot_correl_matrix(correl_out, correlation_name='in_vs_out', vinyeard=Vineyard,p_values_flag='False')
 
+        p_values_square = corr_sig(correl_out)
+        p_values_df = pd.DataFrame(p_values_square, columns=correl_out.columns.values.tolist(),
+                                   index=correl_out.index.values.tolist())
+        plot_correl_matrix(p_values_df, correlation_name='in_vs_out', vinyeard=Vineyard, p_values_flag='True')
 
 def get_storage_per_treatment(storage_df: dict, exp_desc: dict):
     '''
@@ -234,6 +256,9 @@ def enrich_storage_per_treatment(storage_dict: dict):
         df_treatment_storage['Temperature_max_relative'] = (
                 df_treatment_storage['Temperature'] - df_treatment_storage['room_temp']).max()
         df_treatment_storage['mapped_period'] = df_treatment_storage.apply(map_weeks, axis=1)
+        Temperature_dday = df_treatment_storage.groupby('Date')['Temperature'].mean().reset_index()
+        Temperature_dday['Temperature'] = Temperature_dday['Temperature'].cumsum()
+        df_treatment_storage['Temperature_dday'] = df_treatment_storage.merge(Temperature_dday,left_on='Date',right_on='Date')['Temperature_y']
         storage_dict[treatment] = df_treatment_storage
     return storage_dict
 
@@ -288,15 +313,6 @@ def get_relevant_data_per_period(storage_dict: dict):
             relevant_data['std_temp_in_period'] = relevant_data['Temperature'].std()
             relevant_data['avg_humidity_in_period'] = relevant_data['Humidity'].mean()
             relevant_data['std_humidity_in_period'] = relevant_data['Humidity'].std()
-            ######### Omer / Demayo - this are the problem part - I first use this get_data_from_tsfresh
-            #  this function is OK. Now I want to take the result of this function and
-            # combine it with the last row of relevant_data (relevant_data.iloc[-1:])
-            # the problem is when I use cross join, some columns are disappearing, and it makes no sense.
-####
-            # tsfresh_treatment_data = get_data_from_tsfresh(treatment_num=treatments, df=relevant_data,
-            #                                                storage_features=['Humidity', 'Temperature'])
-            # all_storage_and_tsfresh_data = pd.merge(relevant_data.iloc[-1:], tsfresh_treatment_data, how='cross')
-            #this is what I want to do --> final_storage_data_per_treatment[i] = all_storage_and_tsfresh_data
             final_storage_data_per_treatment[i] = relevant_data.iloc[-1:]
 
         data_storage_for_all_periods[treatments] = pd.concat(final_storage_data_per_treatment)
@@ -346,14 +362,14 @@ def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_di
     axs.xaxis.set_major_locator(ticker.MultipleLocator(1))
     axs.set(xlabel='time', ylabel=col_name)
     axs.tick_params(axis='both', labelsize=20)
-    axs.set_xlabel('Week', fontsize=24)
-    axs.set_ylabel(col_name, fontsize=24)
+    axs.set_xlabel('Week', fontsize=21)
+    axs.set_ylabel(col_name, fontsize=21)
     if ytickslim:
         axs.set_ylim(bottom=ytickslim[0], top=ytickslim[1])
     if dist_week:
-        axs.set_title(label=col_name + ':  weeks_dist: ' + str(dist_week) + '  temp_dist: ' + str(dist_temp), size=14)
+        axs.set_title(label=col_name + ':  weeks_dist: ' + str(dist_week) + '  temp_dist: ' + str(dist_temp), size=20)
     else:
-        axs.set_title(label=col_name + ' by ' + hue, size=16)
+        axs.set_title(label=col_name + ' by ' + hue, size=20)
     axs.plot()
 
 
@@ -414,7 +430,7 @@ def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, da
         data = (features_list, range(len(features_list)))
 
     for i, hue in enumerate(temp_dim_list):
-        fig = plt.figure(figsize=(24, 24))
+        fig = plt.figure(figsize=(28, 28))
         fig.subplots_adjust(hspace=0.4, wspace=0.3)
         i_print = 1
         for tup in zip(*data):
@@ -428,10 +444,20 @@ def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, da
                                                            data_for_grpah[
                                                                'disruption_length'])  # mapping 12 to 0 for graphs
             data_for_grpah['new_time'] = data_for_grpah['new_time'] * 3
-            if (df_plot_check[[hue, tup[0]]][tup[0]]).nunique() > max(df_plot_check[hue].nunique(), 4):
+            #y lim axis changes
+            if 'Decay (' in tup[0]:
+                ylim = (data_for_grpah.iloc[:, -1].quantile(0.01), 10)
+            elif 'FER_RG' in tup[0]:
+                ylim = (3,5)
+            elif 'Ferrari' in tup[0]:
+                ylim = (0.3,0.7)
+            else:
+                ylim = (data_for_grpah.iloc[:, -1].quantile(0.01), data_for_grpah.iloc[:, -1].quantile(0.99))
+            if 1 == 1:
+                    # (df_plot_check[[hue, tup[0]]][tup[0]]).nunique() > max(df_plot_check[hue].nunique(), 4):
                 ax = fig.add_subplot(Rows, ncols, i_print)
                 plot_graph(df=data_for_grpah, col_name=tup[0], dim_list=dimension_list, hue=hue,
-                           tmp_dim_list=temp_dim_list, axs=ax)
+                           tmp_dim_list=temp_dim_list, axs=ax, ytickslim=ylim)
                 i_print += 1
                 ax.get_legend().remove()
         handles, labels = ax.get_legend_handles_labels()
@@ -439,7 +465,7 @@ def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, da
         fig2 = plt.gcf()
         plt.show()
         plt.draw()
-        fig2.savefig('figures_update/' + str(data_place_in_dict) + '_' + hue + '_' + str(i) + '.png')
+        fig2.savefig('figures_update/' + str(data_place_in_dict) + '_' + hue + '_' + str(i) + '.png',bbox_inches='tight')
 
 
 def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage_data: pd.DataFrame,
@@ -453,117 +479,95 @@ def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage
     temp_dim_list = copy.copy(DIMS_FOR_GRAPHS)
     temp_dim_list.remove("new_time")
 
-    # Compute Rows required
-    Cols = full_storage_data['disruption_length'].nunique()
-    Rows = full_storage_data['disruption_temperature'].nunique()
+    # Compute Rows required,added 1 for folded dim
+    Cols = full_storage_data['disruption_length'].nunique() + 1  # for folded data
+    Rows = full_storage_data['disruption_temperature'].nunique() + 1  # for folded data
 
     data = (features_list, features_list_t0, range(len(features_list)))
     if features_list_t0 is None:
         data = (features_list, range(len(features_list)))
 
     # loop for each feature
+    # still there is a bug in TA, TSS
     for i, feature in enumerate(data[0]):
-        fig = plt.figure(figsize=(24, 24))
+        fig = plt.figure(figsize=(42, 42))
         fig.subplots_adjust(hspace=0.4, wspace=0.3)
         i_print = 1
-        # loop for each combination of length & temp
-        # for tup in zip(*data):
+        # change 12 weeks to 0 weeks - i.e. - no interruptions
+        full_storage_data['disruption_length'] = np.where(full_storage_data['disruption_length'] == 12, 0,
+                                                          full_storage_data['disruption_length'])
         data_for_grpah = flatten_data_to_grpah(dim_list=dimension_list, df=full_storage_data, col_name=data[0][i],
                                                col_name_t0=data[1][
                                                    i] if features_list_t0 is not None else None)  # take t0 data if exist
         data_for_grpah['new_time'] = data_for_grpah['new_time'] * 3
         ylim = (data_for_grpah.iloc[:,-1].quantile(0.01),data_for_grpah.iloc[:,-1].quantile(0.99))
-        for temp in sorted(full_storage_data['disruption_temperature'].unique()):
-            for length in sorted(full_storage_data['disruption_length'].unique()):
-                data_for_grpah['disruption_length'] = np.where(data_for_grpah['disruption_length'] == 12, 0,
-                                                               data_for_grpah['disruption_length'])
-                ax = fig.add_subplot(Rows, Cols, i_print)
 
-                if length != 12:
+        #fake assign for print only (i.e. split humidity with fake)
+        data_for_grpah['disruption_length'] = np.where((
+            (data_for_grpah['disruption_length'] == 0) & (data_for_grpah['Treatment'] == 2)), 1, data_for_grpah['disruption_length'])
+        #9999 is fake for folding placeholder
+        for temp in sorted(sorted(full_storage_data['disruption_temperature'].unique()) + [9999]):
+            for length in sorted(sorted(full_storage_data['disruption_length'].unique()) + [9999]):
+                #don't print bottom right
+                if temp == 9999 and length == 9999:
+                    break
+                ax = fig.add_subplot(Rows, Cols, i_print)
+                #added this part for treatments 1+2 where it is same temp but humidity is different
+                if temp == 0 and length == 0:  # need 2 prints: treatment 1,2
                     plot_data_df = data_for_grpah[(data_for_grpah['disruption_temperature'] == temp) & (
-                                data_for_grpah['disruption_length'] == length)]
-                elif temp == 0:
+                                                  data_for_grpah['Treatment'] == 1)]
+                    plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
+                               tmp_dim_list=temp_dim_list, axs=ax, dist_week=length,
+                               dist_temp=temp, ytickslim=ylim)
+                    i_print += 1
+                    if len(plot_data_df):
+                        ax.get_legend().remove()
+                    ax = fig.add_subplot(Rows, Cols, i_print)
+
+                elif temp == 0 and length == 1:  # need 2 prints: treatment 1,2
+                    plot_data_df = data_for_grpah[(data_for_grpah['disruption_temperature'] == temp) & (
+                            data_for_grpah['Treatment'] == 2)]
+                    plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
+                               tmp_dim_list=temp_dim_list, axs=ax, dist_week=0,
+                               dist_temp=temp, ytickslim=ylim)
+                    i_print += 1
+                    if len(plot_data_df):
+                        ax.get_legend().remove()
+                    ax = fig.add_subplot(Rows, Cols, i_print)
+                    # assign data back
+                    data_for_grpah['disruption_length'] = np.where(
+                        ((data_for_grpah['disruption_temperature'] == 0) &
+                         (data_for_grpah['disruption_length'] == 1) & (data_for_grpah['Treatment'] == 2)), 0,
+                        data_for_grpah['disruption_length'])
+                #folded by temp
+                elif length == 9999:
                     plot_data_df = data_for_grpah[(data_for_grpah['disruption_temperature'] == temp)]
+                    plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
+                               tmp_dim_list=temp_dim_list, axs=ax, dist_week='All',dist_temp=temp, ytickslim=ylim)
+                    i_print += 1
+                # folded by length
+                elif temp == 9999:
+                    plot_data_df = data_for_grpah[(data_for_grpah['disruption_length'] == length)]
+                    plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
+                               tmp_dim_list=temp_dim_list, axs=ax, dist_week=length,dist_temp='All', ytickslim=ylim)
+                    i_print += 1
                 else:
                     plot_data_df = data_for_grpah[(data_for_grpah['disruption_temperature'] == temp) & (
                                 data_for_grpah['disruption_length'] == length)]
-                plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
-                           tmp_dim_list=temp_dim_list, axs=ax, dist_week=0 if length == 12 else length,
-                           dist_temp=temp, ytickslim=ylim)
-                i_print += 1
-                if len(plot_data_df):
-                    ax.get_legend().remove()
+                    plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
+                               tmp_dim_list=temp_dim_list, axs=ax, dist_week=0 if length == 12 else length,
+                               dist_temp=temp, ytickslim=ylim)
+                    i_print += 1
+
+                    if len(plot_data_df):
+                        ax.get_legend().remove()
 
         handles, labels = ax.get_legend_handles_labels()
-        fig.legend(handles, labels, fontsize=18, loc='lower right', bbox_to_anchor=(1, 0.1))
-        fig2 = plt.gcf()
-        plt.show()
-        plt.draw()
-        fig2.savefig('features_by_matrix/' + str(data_place_in_dict) + '_' + feature + '_' + str(i) + '.png')
-
-
-def create_all_subplots_per_each_fruit_feature_folded_dim(features_list: list, full_storage_data: pd.DataFrame,
-                                               data_place_in_dict: int,
-                                               features_list_t0: list = None, dimension_list=DIMS_FOR_GRAPHS
-                                               ):
-    '''
-
-    :return: number of facets, in each facet there will be subplots
-    '''
-    temp_dim_list = copy.copy(DIMS_FOR_GRAPHS)
-    temp_dim_list.remove("new_time")
-
-    # Compute Rows required
-    # Changes depends on the folded dim
-    Cols = full_storage_data['disruption_length'].nunique()
-    Rows = 1 # full_storage_data['disruption_temperature'].nunique()
-
-    data = (features_list, features_list_t0, range(len(features_list)))
-    if features_list_t0 is None:
-        data = (features_list, range(len(features_list)))
-
-    # loop for each feature
-    for i, feature in enumerate(data[0]):
-        # if we print by temp then 6,24
-        # fig = plt.figure(figsize=(6, 24))
-        fig = plt.figure(figsize=(24, 4.8))
-        fig.subplots_adjust(hspace=0.4, wspace=0.3)
-        i_print = 1
-        # loop for each combination of length & temp
-        # for tup in zip(*data):
-        data_for_grpah = flatten_data_to_grpah(dim_list=dimension_list, df=full_storage_data, col_name=data[0][i],
-                                               col_name_t0=data[1][
-                                                   i] if features_list_t0 is not None else None)  # take t0 data if exist
-        data_for_grpah['new_time'] = data_for_grpah['new_time'] * 3
-        ylim = (data_for_grpah.iloc[:, -1].quantile(0.01), data_for_grpah.iloc[:, -1].quantile(0.99))
-
-        # choose one of the for loop depands on the folded dim
-        # for temp in sorted(full_storage_data['disruption_temperature'].unique()):
-        for length in sorted(full_storage_data['disruption_length'].unique()):
-                data_for_grpah['disruption_length'] = np.where(data_for_grpah['disruption_length'] == 12, 0,
-                                                               data_for_grpah['disruption_length'])
-                ax = fig.add_subplot(Rows, Cols, i_print)
-
-                #chhose one of the plot_data_df based on the folded dim
-                # plot_data_df = data_for_grpah[(data_for_grpah['disruption_temperature'] == temp)]
-                plot_data_df = data_for_grpah[(data_for_grpah['disruption_length'] == length)]
-
-                plot_graph(df=plot_data_df, col_name=data[0][i], dim_list=dimension_list, hue='Vineyard',
-                           # tmp_dim_list=temp_dim_list, axs=ax, dist_week='_',dist_temp=temp, ytickslim=ylim)
-                           tmp_dim_list=temp_dim_list, axs=ax, dist_week=length, dist_temp='_', ytickslim=ylim)
-                i_print += 1
-                if len(plot_data_df):
-                    ax.get_legend().remove()
-
-        # handles, labels = ax.get_legend_handles_labels()
         # fig.legend(handles, labels, fontsize=18, loc='lower right', bbox_to_anchor=(1, 0.1))
         fig2 = plt.gcf()
         plt.show()
         plt.draw()
-        fig2.savefig('features_by_folded_dim/' + str(data_place_in_dict) + '_' + feature + '_' + str(i) + '.png')
-        # break
-
-
+        fig2.savefig('features_by_matrix/test/' + str(data_place_in_dict) + '_' + feature + '_' + str(i) + '.png',bbox_inches='tight')
 
 
 if __name__ == '__main__':
@@ -572,34 +576,27 @@ if __name__ == '__main__':
 
     # print all subplots
     relevant_t0_cols, relevant_cols = get_all_t0(df=full_data_w_storage)
-    storage_list = list((Counter(full_data_w_storage) - Counter(COLS_ONLY_OUT) - Counter(relevant_t0_cols) - Counter(
-        relevant_cols) - Counter(NOT_PRINT_TRENDS) - Counter(COLS_HUE)).elements())
+    storage_list = ['Temperature_dday','kPa']
 
     data_to_plot = {1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
                      # 2: [COLS_ONLY_OUT, 'None'],  # data collected only in out storage
                     #3: [storage_list, 'None']  # data relevant for storage only
                     }
+    # 1 image with all features, per 3 dimensions: vineyard, length, temp
+    for feature_list in enumerate(data_to_plot.values()):
+        create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
+                            features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
+                            dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
 
-    # for feature_list in enumerate(data_to_plot.values()):
-    #     create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
-    #                         features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
-    #                         dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
 
-
-    # matrix plotting
+    # matrix plotting + folded dim
     # for feature_list in enumerate(data_to_plot.values()):
     #     create_all_subplots_per_each_fruit_feature(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
     #                             features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
     #                             dimension_list=DIMS_FOR_GRAPHS, data_place_in_dict=feature_list[0])
 
 
-    # folded matrix plotting
-    for feature_list in enumerate(data_to_plot.values()):
-        create_all_subplots_per_each_fruit_feature_folded_dim(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
-                                features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
-                                dimension_list=DIMS_FOR_GRAPHS, data_place_in_dict=feature_list[0])
-
     # # create correlation matrix
-    # in_cols = [col for col in raw_data.columns if 'T0' in col and col!= 'Shattering(%) (T0)']
+    # in_cols = [col for col in raw_data.columns if 'T0' in col and col!= 'Shatter (T0)']
     # create_pearson_correl(raw_data, col_list_in=in_cols, col_list_out=COLS_OUT)
     print("Done!!!")
