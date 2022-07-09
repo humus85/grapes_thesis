@@ -17,12 +17,14 @@ import tsfresh
 pd.options.mode.chained_assignment = None
 
 
-PATH = 'data/untitled folder/Grapes-Vineyard A edited.xlsx' #'data/Grapes-Vineyard A.xlsx'
-PATH_B = 'data/untitled folder/Grapes-Vineyard B-edited.xlsx' #'data/Grapes-Vineyard B.xlsx'
+PATH = 'data/2021_data/Grapes-Vineyard A edited.xlsx'
+PATH_B = 'data/2021_data/Grapes-Vineyard B-edited.xlsx'
+PATH_2020 = 'data/2020_data/Grapes 2020 data.xlsx'
 COLS_OUT = ['Acceptance', 'Rachis Index', 'Bleaching index ', 'Cracking index', 'Shattering(%)', 'Firmness',
             'Weightloss (%)', 'Decay (%)']
-PATH_VINYARDS = 'data/Decay assesment in vineyards A and B (6) (1).xlsx'
-PATH_STORAGE = 'data/untitled folder/Erdom room tempeartures (2).xlsx'
+PATH_VINEYARDS = 'data/Decay assesment in vineyards A and B (6) (1).xlsx'
+PATH_STORAGE = 'data/2021_data/Erdom room tempeartures (2).xlsx'
+PATH_2020_STORAGE = 'data/2020_data/Erdom room temperature 2020.xlsx'
 TREAT_DESCRIPTION = {
     1: ['room 10 S617.01.22', 12, 'room 10 S617.01.22', 0],
     2: ['Room 20 S5 17.01.22', 12, 'Room 20 S5 17.01.22', 0],
@@ -39,12 +41,38 @@ TREAT_DESCRIPTION = {
     13: ['Room 40+10log.1', 2, 'room 10 S617.01.22', 15],
     14: ['Room 40+10log.1', 3, 'room 10 S617.01.22', 15]
 }
-RELEVANT_STORAGE_DATA = ['treatment', 'Humidity_cumsum', 'Temperature_cumsum', 'Humidity_max', 'Temperature_max',
-                         'Temperature_max_relative',
-                         'mapped_period', 'avg_temp_in_period', 'std_temp_in_period', 'avg_humidity_in_period',
-                         'std_humidity_in_period','Temperature_dday','kPa']
+
+
+TREAT_2020_DESCRIPTION = {
+    1: ['0C(All)', 12, '0C(All)', 0],
+    2: ['3°C low H', 12, '3°C low H', 3],
+    3: ['3°C low H', 12, '3°C low H', 3],
+    4: ['6°C All (R22)', 12, '6°C All (R22)', 6],
+    5: ['0C(All)', 12, '0C(All)', 0],
+    6: ['0C(All)', 12, '0C(All)', 0],
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+RELEVANT_STORAGE_DATA = ['treatment',
+                         # 'Humidity_cumsum', 'Temperature_cumsum', 'Humidity_max', 'Temperature_max',
+                         # 'Temperature_max_relative',
+                         'mapped_period',
+                         # 'avg_temp_in_period', 'std_temp_in_period', 'avg_humidity_in_period','std_humidity_in_period',
+                         'Temperature_dday','kPa']
 
 COLS_ONLY_OUT = ['Weightloss (%)', 'Bleaching index ', 'Decay', 'Decay (%)', 'Shriveling ']
+COLS_ONLY_OUT_2020 = ['Weightloss (%)', 'Bleaching index ', 'Decay', 'Decay (%)']
 NOT_PRINT_TRENDS = ['Vineyard', 'Treatment', 'Replication', 'Time', 'Vineyard_Number_of_measures', 'Vineyard_index',
                     'Vineyard_Std_index', 'Vineyard_Incidence', 'new_time', 'treatment', 'mapped_period']
 
@@ -52,7 +80,7 @@ DIMS_FOR_GRAPHS = ['Vineyard', 'new_time', 'disruption_temperature', 'disruption
 COLS_HUE = ['disruption_length', 'disruption_temperature']
 
 
-def get_storage_data(path_storage):
+def get_storage_data(path_storage,is_flag_2020):
     '''
     this function receive path to storgae and does the following
         1. read the excel file
@@ -66,19 +94,26 @@ def get_storage_data(path_storage):
     xl = pd.ExcelFile(path_storage)
     dfs = {}
     dfs_base = {''}
-    for sheet in ([s for s in xl.sheet_names if s != 'Sheet1']):
+    for sheet in ([s for s in xl.sheet_names if (s != 'Sheet1')]):
         dfs[sheet] = pd.read_excel(path_storage, sheet_name=sheet, usecols='A:I')
     # room 10 was malfunction at 24/12/21 so, I'm removing this data and paste data from room 3
-    dfs['room 10 S617.01.22'] = dfs['room 10 S617.01.22'].drop(dfs['room 10 S617.01.22'].tail(2311).index)
-    dfs['Room 3 S2 17.01.22'] = dfs['Room 3 S2 17.01.22'].drop(dfs['Room 3 S2 17.01.22'].head(2702).index)
-    dfs['room 10 S617.01.22'] = dfs['room 10 S617.01.22'].append(dfs['Room 3 S2 17.01.22'], ignore_index=True)
-    dfs.pop('Room 3 S2 17.01.22', None)
-    dfs_baselines = {'Room 16 log2': [2.5], 'Room 20 S5 17.01.22': [0.0], 'room 19 S4 17.01.22': [10],
-                     'room 10 S617.01.22': [0], 'Room 22 log.3': [5], 'Room 40+10log.1': [15]}
+    if not is_flag_2020:
+        dfs['room 10 S617.01.22'] = dfs['room 10 S617.01.22'].drop(dfs['room 10 S617.01.22'].tail(2311).index)
+        dfs['Room 3 S2 17.01.22'] = dfs['Room 3 S2 17.01.22'].drop(dfs['Room 3 S2 17.01.22'].head(2702).index)
+        dfs['room 10 S617.01.22'] = dfs['room 10 S617.01.22'].append(dfs['Room 3 S2 17.01.22'], ignore_index=True)
+        dfs.pop('Room 3 S2 17.01.22', None)
+        dfs_baselines = {'Room 16 log2': [2.5], 'Room 20 S5 17.01.22': [0.0], 'room 19 S4 17.01.22': [10],
+                         'room 10 S617.01.22': [0], 'Room 22 log.3': [5], 'Room 40+10log.1': [15]}
+    if is_flag_2020:
+        dfs_baselines = {'0C(All)':[0],'6°C All (R22)':[6],'3°C low H':[3],'3°C low H  aver.':[3]}
+
     # create columns for each storage room
     for sheet in ([s for s in xl.sheet_names if s != 'Sheet1' and s != 'Room 3 S2 17.01.22']):
         # clean data before test started, intendend to room 10 mainly
-        mask = dfs[sheet]['Date'] >= '2021-10-21'
+        if is_flag_2020:
+            mask = dfs[sheet]['Date'] >= '29/09/2020'
+        else:
+            mask = dfs[sheet]['Date'] >= '2021-10-21'
         dfs[sheet] = dfs[sheet].loc[mask]
         # add week
         first_date = dfs[sheet]['Date'].iloc[0]
@@ -100,10 +135,13 @@ def get_data(path, path_b) -> pd.DataFrame:
     :return: data frame contains the concat of the 2 vinyards
     '''
     df_a = pd.read_excel(path, sheet_name='Sheet1')
-    df_b = pd.read_excel(path_b, sheet_name='Sheet1')
     column_names = df_a.columns
-    df_b.columns = column_names
-    final_df = pd.concat([df_a, df_b])
+    if path_b:
+        df_b = pd.read_excel(path_b, sheet_name='Sheet1')
+        df_b.columns = column_names
+        final_df = pd.concat([df_a, df_b])
+        return final_df
+    final_df = df_a
     return final_df
 
 
@@ -121,14 +159,14 @@ def get_vinyards_data(path) -> pd.DataFrame:
     return df_v
 
 
-def get_prep_df(path, path_b, path_v, treatment_dict: dict) -> pd.DataFrame:
+def get_prep_df(path, path_b, path_v,treatment_dict: dict,is_flag_2020=None) -> pd.DataFrame:
     '''
 
     x:param path: using get_data function to create raw_data of measures
     :param path_b: using get_data function to create raw_data of measures
-    :param path_v: path to vinyards to insert to get_vinyards_data function
+    :param path_v: path to vineyards to insert to get_vinyards_data function
     :param treatment_dict:
-    :return: dataframe with cleaned column names, mapped period to numbers. in adition it adds the disruption length and disruption temp per each treatment.
+    :return: dataframe with cleaned column names, mapped period to numbers. in adittion it adds the disruption length and disruption temp per each treatment.
     '''
 
     new_df = get_data(path, path_b)
@@ -139,16 +177,19 @@ def get_prep_df(path, path_b, path_v, treatment_dict: dict) -> pd.DataFrame:
     new_df.rename(columns={'Rachis index  (T0)': 'Rachis Index  (T0)'}, inplace=True)
     # remove shatter due to redundant
     new_df = new_df.drop('Shatter (T0)', axis=1)
-    df_vinyards = get_vinyards_data(path=path_v)
-    new_df = pd.merge(left=new_df, right=df_vinyards, left_on='Vineyard', right_on='Vineyard')
+    if path_v:
+        df_vinyards = get_vinyards_data(path=path_v)
+        new_df = pd.merge(left=new_df, right=df_vinyards, left_on='Vineyard', right_on='Vineyard')
     match = {
         'I': 1,
         'II': 2,
         'III': 3,
         'IV': 4
     }
-
-    new_df['new_time'] = new_df['Time'].map(match).fillna(0)
+    if not is_flag_2020:
+        new_df['new_time'] = new_df['Time'].map(match).fillna(0)
+    else:
+        new_df['new_time'] = new_df['Time']
     new_df = new_df.merge(pd.DataFrame(treatment_dict).T[[1, 3]], how='left', left_on='Treatment', right_index=True)
     new_df.rename(columns={1: 'disruption_length', 3: 'disruption_temperature'}, inplace=True)
     return new_df
@@ -227,6 +268,7 @@ def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: lis
                                    index=correl_out.index.values.tolist())
         plot_correl_matrix(p_values_df, correlation_name='in_vs_out', vinyeard=Vineyard, p_values_flag='True')
 
+
 def get_storage_per_treatment(storage_df: dict, exp_desc: dict):
     '''
     :param storage_df: dictionary contains all storage data, key stands for the treatment
@@ -249,12 +291,12 @@ def enrich_storage_per_treatment(storage_dict: dict):
     :return: dictionary contains some statistics on log of the per each treatment
     '''
     for treatment, df_treatment_storage in storage_dict.items():
-        df_treatment_storage['Humidity_cumsum'] = df_treatment_storage['Humidity'].cumsum()
-        df_treatment_storage['Temperature_cumsum'] = df_treatment_storage['Temperature'].cumsum()
-        df_treatment_storage['Humidity_max'] = df_treatment_storage['Humidity'].max()
-        df_treatment_storage['Temperature_max'] = df_treatment_storage['Temperature'].max()
-        df_treatment_storage['Temperature_max_relative'] = (
-                df_treatment_storage['Temperature'] - df_treatment_storage['room_temp']).max()
+        # df_treatment_storage['Humidity_cumsum'] = df_treatment_storage['Humidity'].cumsum()
+        # df_treatment_storage['Temperature_cumsum'] = df_treatment_storage['Temperature'].cumsum()
+        # df_treatment_storage['Humidity_max'] = df_treatment_storage['Humidity'].max()
+        # df_treatment_storage['Temperature_max'] = df_treatment_storage['Temperature'].max()
+        # df_treatment_storage['Temperature_max_relative'] = (
+        #         df_treatment_storage['Temperature'] - df_treatment_storage['room_temp']).max()
         df_treatment_storage['mapped_period'] = df_treatment_storage.apply(map_weeks, axis=1)
         Temperature_dday = df_treatment_storage.groupby('Date')['Temperature'].mean().reset_index()
         Temperature_dday['Temperature'] = Temperature_dday['Temperature'].cumsum()
@@ -373,29 +415,34 @@ def plot_graph(df: pd.DataFrame, col_name: str, dim_list: list, hue: str, tmp_di
     axs.plot()
 
 
-def get_all_t0(df: pd.DataFrame):
+def get_all_t0(df: pd.DataFrame, is_2020_flag=None):
     '''
     :paxam df: this function get raw data with all columns
     :return: 2 lists of all relevant columns in the data that has data in entrance to storage and the column name in out of storage
     '''
+    empty_2020_cols = ['TA','Berry weight','Shattering(%)','Cracking index','TSS']
+    empty_2020_t0_cols = ['TA  (T0)','Berry weight(T0)','Shattering(%) (T0)','Cracking index  (T0)','TSS (T0)']
     relevant_t0 = [col for col in df.columns if '(T0)' in col]
     relevant_columns_t0_list = [col.replace('(T0)', '').rstrip() for col in relevant_t0 if '(T0)' in col]
     list_t0 = list(set(df.columns).intersection(relevant_columns_t0_list))
+    if is_2020_flag:
+        relevant_t0 = list(set(relevant_t0) - set(empty_2020_t0_cols))
+        list_t0 = list(set(list_t0) - set(empty_2020_cols))
     return sorted(relevant_t0), sorted(list_t0)
 
 
-def get_data_storage(path_storage, treat_dict):
+def get_data_storage(path_storage, treat_dict,all_storage_data,is_flag_2020=None):
     '''
     :param path_storage: path to storage data
     :param treat_dict: tretment dictionary contains treatment and storage data
     :return: raw_data enriched with statistics about storage: temp, humidity, etc.
     '''
-    df_storage = get_storage_data(path_storage=path_storage)
+    df_storage = get_storage_data(path_storage=path_storage,is_flag_2020=is_flag_2020)
     storge_data_per_treatment = get_storage_per_treatment(storage_df=df_storage, exp_desc=treat_dict)
     data_storage_enriched_per_treatment = enrich_storage_per_treatment(storge_data_per_treatment)
     final_storage_data = get_relevant_data_per_period(data_storage_enriched_per_treatment)
     final_storage_data = final_storage_data.reset_index().rename(columns={'level_0': 'treatment', 'level_1': 'time_'})
-    df_storage_data_final = raw_data.merge(final_storage_data[RELEVANT_STORAGE_DATA], how='inner',
+    df_storage_data_final = all_storage_data.merge(final_storage_data[RELEVANT_STORAGE_DATA], how='inner',
                                            left_on=['Treatment', 'new_time']
                                            , right_on=['treatment', 'mapped_period'])
     return df_storage_data_final
@@ -404,7 +451,7 @@ def get_data_storage(path_storage, treat_dict):
 # def is_interesting_data_for_plot(df:pd.DataFrame):
 
 
-def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, data_place_in_dict: int,
+def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, data_place_in_dict: int,flag_2020,
                         features_list_t0: list = None, dimension_list=DIMS_FOR_GRAPHS, ncols=4):
     '''
     :param data_place_in_dict: adding int for creating proper naming for the graph.
@@ -433,12 +480,13 @@ def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, da
         fig = plt.figure(figsize=(28, 28))
         fig.subplots_adjust(hspace=0.4, wspace=0.3)
         i_print = 1
+
         for tup in zip(*data):
             data_for_grpah = flatten_data_to_grpah(dim_list=dimension_list, df=full_storage_data, col_name=tup[0],
                                                    col_name_t0=tup[
                                                        1] if features_list_t0 is not None else None)  # take t0 data if exist
-            df_plot_check = data_for_grpah.fillna(np.inf).groupby(dimension_list)[[tup[0]]].mean().replace(np.inf,
-                                                                                                           np.nan).reset_index()
+            # df_plot_check = data_for_grpah.fillna(np.inf).groupby(dimension_list)[[tup[0]]].mean().replace(np.inf,
+            #                                                                                                np.nan).reset_index()
             # new_df['new_time'] = new_df['Time'].map(match).fillna(0)
             data_for_grpah['disruption_length'] = np.where(data_for_grpah['disruption_length'] == 12, 0,
                                                            data_for_grpah[
@@ -465,11 +513,11 @@ def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, da
         fig2 = plt.gcf()
         plt.show()
         plt.draw()
-        fig2.savefig('figures_update/' + str(data_place_in_dict) + '_' + hue + '_' + str(i) + '.png',bbox_inches='tight')
+        fig2.savefig('figures_update/' + ('2020/' if flag_2020 else '2021/') + str(data_place_in_dict) + '_' + hue + '_' + str(i) + '.png',bbox_inches='tight')
 
 
 def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage_data: pd.DataFrame,
-                                               data_place_in_dict: int,
+                                               data_place_in_dict: int,flag_2020=None,
                                                features_list_t0: list = None, dimension_list=DIMS_FOR_GRAPHS
                                                ):
     '''
@@ -488,7 +536,6 @@ def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage
         data = (features_list, range(len(features_list)))
 
     # loop for each feature
-    # still there is a bug in TA, TSS
     for i, feature in enumerate(data[0]):
         fig = plt.figure(figsize=(42, 42))
         fig.subplots_adjust(hspace=0.4, wspace=0.3)
@@ -571,22 +618,31 @@ def create_all_subplots_per_each_fruit_feature(features_list: list, full_storage
 
 
 if __name__ == '__main__':
-    raw_data = get_prep_df(path=PATH, path_b=PATH_B, path_v=PATH_VINYARDS, treatment_dict=TREAT_DESCRIPTION)
-    full_data_w_storage = get_data_storage(path_storage=PATH_STORAGE, treat_dict=TREAT_DESCRIPTION)
+    year_2020_flag=True
+    if not year_2020_flag:
+    #2021
+        raw_data = get_prep_df(path=PATH, path_b=PATH_B, path_v=PATH_VINEYARDS, treatment_dict=TREAT_DESCRIPTION)
+        full_data_w_storage = get_data_storage(path_storage=PATH_STORAGE, treat_dict=TREAT_DESCRIPTION,all_storage_data=raw_data)
 
+    #2020
+    else:
+        raw_data = get_prep_df(path=PATH_2020, path_b=None, path_v=None, treatment_dict=TREAT_2020_DESCRIPTION, is_flag_2020=year_2020_flag)
+        full_data_w_storage = get_data_storage(path_storage=PATH_2020_STORAGE, treat_dict=TREAT_2020_DESCRIPTION,
+                                               is_flag_2020=year_2020_flag,all_storage_data=raw_data)
     # print all subplots
-    relevant_t0_cols, relevant_cols = get_all_t0(df=full_data_w_storage)
+    relevant_t0_cols, relevant_cols = get_all_t0(df=full_data_w_storage,is_2020_flag=year_2020_flag)
     storage_list = ['Temperature_dday','kPa']
-
+    #
     data_to_plot = {1: [relevant_cols, relevant_t0_cols],  # data that collected both in and out
-                     # 2: [COLS_ONLY_OUT, 'None'],  # data collected only in out storage
-                    #3: [storage_list, 'None']  # data relevant for storage only
+                    2: [COLS_ONLY_OUT if not year_2020_flag else COLS_ONLY_OUT_2020, 'None'],  # data collected only in out storage
+                    3: [storage_list, 'None']  # data relevant for storage only
                     }
     # 1 image with all features, per 3 dimensions: vineyard, length, temp
-    for feature_list in enumerate(data_to_plot.values()):
-        create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
-                            features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
-                            dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0])
+    # for feature_list in enumerate(data_to_plot.values()):
+    #     create_all_subplots(features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
+    #                         features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
+    #                         dimension_list=DIMS_FOR_GRAPHS, ncols=4, data_place_in_dict=feature_list[0],
+    #                         flag_2020=year_2020_flag)
 
 
     # matrix plotting + folded dim
@@ -599,4 +655,12 @@ if __name__ == '__main__':
     # # create correlation matrix
     # in_cols = [col for col in raw_data.columns if 'T0' in col and col!= 'Shatter (T0)']
     # create_pearson_correl(raw_data, col_list_in=in_cols, col_list_out=COLS_OUT)
+
+
+    #prepare data to work
+    # for feature_list in enumerate(data_to_plot.values()):
+    # data_for_grpah = flatten_data_to_grpah(dim_list=dimension_list, df=full_storage_data, col_name=tup[0],
+    #                                        col_name_t0=tup[1] if features_list_t0 is not None else None)
+    # full_data_w_storage.to_csv('/Users/matan.lindenbaum/PycharmProjects/pythonProject/pythonProject2/data/untitled folder/final_data_before_analysis.csv',encoding='utf-8',sep='\t')
+
     print("Done!!!")
