@@ -233,11 +233,13 @@ def create_pearson_correl(df: pd.DataFrame, col_list_in: list, col_list_out: lis
     df_out = df[col_list_out]
 
     # print correl per all vineyards
-    for Vineyard in df_in['Vineyard'].unique():
+    if is_flag_2020:
+        df_in['Vineyard'] = np.where((df_in.Vineyard == 'E') | (df_in.Vineyard == 'F'), 'A', df_in.Vineyard)
+    vineyards_to_run = df_in['Vineyard'].unique()
+    for Vineyard in vineyards_to_run:
         correl = df_in[df_in['Vineyard'] == Vineyard].corr()
         p_values = corr_sig(correl)
         plot_correl_matrix(correl, correlation_name='in_vs_in', vinyeard=Vineyard,p_values_flag='False', flag_2020=is_flag_2020)
-
         p_values_df = pd.DataFrame(p_values, columns=correl.columns.values.tolist(),
                                    index=correl.index.values.tolist())
         plot_correl_matrix(p_values_df, correlation_name='in_vs_in', vinyeard=Vineyard, p_values_flag='True',flag_2020=is_flag_2020)
@@ -481,8 +483,8 @@ def create_all_subplots(features_list: list, full_storage_data: pd.DataFrame, da
             #y lim axis changes
             if ('Decay (' in tup[0]) and (not flag_2020):
                 ylim = (data_for_grpah.iloc[:, -1].quantile(0.01), 10)
-            elif ('Decay (' in tup[0]) and (not flag_2020):
-                ylim = (data_for_grpah.iloc[:, -1].quantile(0.01), 15)
+            elif ('Decay (' in tup[0]) and (flag_2020):
+                ylim = (15,20)
             elif ('FER_RG' in tup[0]) and (not flag_2020):
                 ylim = (3,5)
             elif ('FER_RG' in tup[0]) and (flag_2020):
@@ -639,12 +641,12 @@ if __name__ == '__main__':
 
 
     # matrix plotting + folded dim
-    for feature_list in enumerate(data_to_plot.values()):
-        create_all_subplots_per_each_fruit_feature(
-                                features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
-                                features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
-                                dimension_list=DIMS_FOR_GRAPHS, data_place_in_dict=feature_list[0],
-                                flag_2020=year_2020_flag)
+    # for feature_list in enumerate(data_to_plot.values()):
+    #     create_all_subplots_per_each_fruit_feature(
+    #                             features_list=feature_list[1][0], full_storage_data=full_data_w_storage,
+    #                             features_list_t0=feature_list[1][1] if feature_list[1][1] != 'None' else None,
+    #                             dimension_list=DIMS_FOR_GRAPHS, data_place_in_dict=feature_list[0],
+    #                             flag_2020=year_2020_flag)
 
 
     ## create correlation matrix
